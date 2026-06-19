@@ -15,7 +15,7 @@ using LoopVectorization
 # To install diptest, use anaconda: conda install -c conda-forge r-diptest
 R"""library(diptest)"""
 export CreateJ, TheoryR, TheoryOutlier, bimodal_test, format_elapsed, extract_stationary_C, 
-    find_fixed_point, GaussianTanh!, GaussianTanh_jac!, gauss_expectation, 
+    find_fixed_point, GaussianTanh!, GaussianTanh_jac!, 
     τ_parser, autocov_fft, PhaseClassifier, ComputeMeanDistance, compute_g, ComputeDInf,
     ComputeLSPR, LSPR_params, tanhLSPR, KSEntropyKYDimension, NumericalAutocorrelation, 
     GaussianPositiveActivation!, ϕ_positive, ϕ_positive_p, NumericalPRD, TheoreticalPRϕ, parameter_token,

@@ -3,8 +3,10 @@ using QuadGK, KrylovKit, Trapz
 using FFTW, StatsBase, Roots
 using LinearAlgebra, DifferentialEquations
 using Random, LoopVectorization
-include("Utils.jl")
-using .Utils
+const _UTILS_PATH = joinpath(@__DIR__, "Utils.jl")
+# load Utils into Main, not into DMFT
+isdefined(Main, :Utils) || Base.include(Main, _UTILS_PATH)
+using Main.Utils: ϕ_positive, ϕ_positive_p, τ_parser
 export DMFT_FP_Gaussian, DMFT_FP_Generic, CreateDMFTRateModel,
     DMFTMainloop, DMFTRateModel, LLE_DMFT,
     DMFT_Stationary_Solver_B0, DMFT_Nonstationary_Solver_B0, 
@@ -1492,6 +1494,54 @@ function _normal_pair_tanh_product_tturbo(
     @tturbo for b in eachindex(znodes), a in eachindex(znodes)
         x2 = μ2 + σ2 * (ρ * znodes[a] + ρperp * znodes[b])
         s += ϕ1_weighted_nodes[a] * weights[b] * tanh(x2)
+    end
+    return s
+end
+
+# Fast path for the nonnegative activation ϕ_positive(x) = ½(1 + tanh x), mirroring
+# the tanh specialization above. 
+function _fill_stationary_Cϕ_B0!(
+    Cϕ::Vector{Float64},
+    ::typeof(ϕ_positive),
+    μ::Float64,
+    Δ::Float64,
+    Kx::Vector{Float64},
+    ϕ_nodes::Vector{Float64},
+    ϕ_weighted_nodes::Vector{Float64},
+    znodes::Vector{Float64},
+    weights::Vector{Float64},
+)
+    Δ = max(Δ, 0.0)
+    if Δ <= 1e-14
+        fill!(Cϕ, ϕ_positive(μ)^2)
+        return Cϕ
+    end
+
+    σ = sqrt(Δ)
+    @inbounds for i in eachindex(Kx)
+        Kτ = clamp(Kx[i], -Δ, Δ)
+        ρ = clamp(Kτ / Δ, -1.0, 1.0)
+        ρperp = sqrt(max(1.0 - ρ^2, 0.0))
+        Cϕ[i] = _normal_pair_positive_product_tturbo(
+            μ, σ, ρ, ρperp, ϕ_weighted_nodes, znodes, weights
+        )
+    end
+    return Cϕ
+end
+
+function _normal_pair_positive_product_tturbo(
+    μ2::Float64,
+    σ2::Float64,
+    ρ::Float64,
+    ρperp::Float64,
+    ϕ1_weighted_nodes::Vector{Float64},
+    znodes::Vector{Float64},
+    weights::Vector{Float64},
+)
+    s = 0.0
+    @tturbo for b in eachindex(znodes), a in eachindex(znodes)
+        x2 = μ2 + σ2 * (ρ * znodes[a] + ρperp * znodes[b])
+        s += ϕ1_weighted_nodes[a] * weights[b] * (0.5 * (1.0 + tanh(x2)))
     end
     return s
 end
@@ -3058,7 +3108,6 @@ function integ_xtraj_stationary!(ws::IntegXtrajStationaryWorkspace,
 
     return nothing
 end
-
 
 # For debug. Initialize using direct simulation.
 # function initialize_mC_circular(model::DMFTStationaryRateModel_CUDA; N::Integer=model.N, 
