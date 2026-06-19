@@ -10,7 +10,7 @@ flush(stdout)
     include($UTILS_PATH)
     include($DMFT_PATH)
 end
-# This should take less than 1min if using 36 workers
+# This should take less than 4min if using 36 workers
 @everywhere begin
     using Distributed, LinearAlgebra, FFTW
     using .Utils, .DMFT
